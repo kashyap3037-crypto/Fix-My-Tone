@@ -4,6 +4,19 @@ inputTextEl.addEventListener("input", () => {
     document.getElementById("charCount").textContent = inputTextEl.value.length;
 });
 
+// ─── Output Style Pills ───────────────────────────────────────────────────────
+let selectedOutputStyle = "Highly Formal (Corporate)";
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".style-pill").forEach(pill => {
+        pill.addEventListener("click", () => {
+            document.querySelectorAll(".style-pill").forEach(p => p.classList.remove("active"));
+            pill.classList.add("active");
+            selectedOutputStyle = pill.dataset.value;
+        });
+    });
+});
+
 // ─── Convert ─────────────────────────────────────────────────────────────────
 async function convertText() {
     const input     = inputTextEl.value.trim();
@@ -35,7 +48,7 @@ async function convertText() {
         const res  = await fetch("/api/convert", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ input, tone })
+            body: JSON.stringify({ input, tone, outputStyle: selectedOutputStyle })
         });
         const data = await res.json();
 
@@ -80,6 +93,31 @@ function copyText() {
     const text = document.getElementById("outputText").textContent;
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => showToast("Copied!"));
+}
+
+function refreshForm() {
+    const inputEl   = document.getElementById("inputText");
+    const outputEl  = document.getElementById("outputText");
+    const outputBox = document.getElementById("outputBox");
+    const rewriteBtn = document.getElementById("rewriteBtn");
+    const refreshIcon = document.querySelector("#refreshBtn svg");
+
+    inputEl.value = "";
+    document.getElementById("charCount").textContent = "0";
+    outputEl.textContent = "Your polished text will appear here...";
+    outputEl.classList.remove("result-ready");
+    outputBox.classList.remove("has-result");
+    rewriteBtn.style.display = "none";
+
+    // Spin the refresh icon briefly
+    refreshIcon.style.transition = "transform 0.5s ease";
+    refreshIcon.style.transform  = "rotate(360deg)";
+    setTimeout(() => {
+        refreshIcon.style.transition = "none";
+        refreshIcon.style.transform  = "";
+    }, 500);
+
+    inputEl.focus();
 }
 
 function showToast(msg) {

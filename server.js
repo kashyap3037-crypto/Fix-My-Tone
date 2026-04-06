@@ -28,7 +28,7 @@ const apiLimiter = rateLimit({
 
 // API route
 app.post('/api/convert', apiLimiter, async (req, res) => {
-    const { input, tone } = req.body;
+    const { input, tone, outputStyle } = req.body;
 
     if (!input) {
         return res.status(400).json({ error: 'Input required' });
@@ -38,17 +38,30 @@ app.post('/api/convert', apiLimiter, async (req, res) => {
         let resultText = "";
 
         if (ai) {
-            const prompt = `
-Rewrite the following text into a professional "${tone}" tone.
+            const prompt = `You are a professional writing assistant.
 
-Rules:
-- Keep meaning same
-- Remove rude/aggressive tone
-- Make it polite and professional
-- Convert Hinglish/Hindi to English if needed
+Your task: Rewrite the user's text to match the requested tone and output style.
 
-Text: "${input}"
-`;
+Tone: "${tone}"
+Output Style: "${outputStyle || 'Balanced Professional'}"
+
+STRICT RULES — follow every single one:
+1. Return ONLY the rewritten text. Nothing else.
+2. Do NOT include any headers, labels, bullet explanations, or notes.
+3. Do NOT write things like "Key Changes:", "Note:", "Here is the rewrite:", or any meta-commentary.
+4. Do NOT use markdown formatting like ** or * for bold/italic.
+5. Keep the original meaning perfectly intact — only change the tone and style.
+6. Convert any Hinglish or Hindi words to formal English.
+7. Remove all rude, aggressive, or informal language.
+8. Match the Output Style:
+   - "Highly Formal (Corporate)": Long, structured, impersonal corporate language.
+   - "Balanced Professional": Warm but professional; suitable for emails and messages.
+   - "Concise & Direct": Short, punchy, action-oriented. No fluff.
+
+User's original text:
+"${input}"
+
+Respond with ONLY the rewritten text:`;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
