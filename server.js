@@ -15,21 +15,6 @@ if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your_gemini_ap
     ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 }
 
-// Setup SQLite database for local storage
-const db = new sqlite3.Database('./history.db', (err) => {
-    if (err) {
-        console.error('Error opening database', err.message);
-    } else {
-        db.run(`CREATE TABLE IF NOT EXISTS conversions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            original_text TEXT,
-            tone TEXT,
-            converted_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`);
-        console.log('Connected to the local SQLite database.');
-    }
-});
 
 // Middleware
 app.use(cors());
