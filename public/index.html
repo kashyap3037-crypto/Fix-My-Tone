@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tone Tadka</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="container glass-panel">
+        <h1>WordMasala</h1>
+        <p class="tagline">Write freely. We’ll make it professional.</p>
+
+        <div class="tabs">
+            <button class="tab active" id="tab-polisher" onclick="switchTab('polisher')">Polisher</button>
+            <button class="tab" id="tab-history" onclick="switchTab('history')">History</button>
+        </div>
+
+        <div id="polisherSection">
+
+            <textarea id="inputText" placeholder="Type anything... no need to be formal 😄"></textarea>
+
+            <select id="tone">
+                <option>Corporate Formal</option>
+                <option>Polite Email</option>
+                <option>Professional WhatsApp</option>
+                <option>Apology Message</option>
+                <option>Meeting Request</option>
+                <option>Resume Bullet Point</option>
+            </select>
+
+            <button id="convertBtn" onclick="convertText()">Convert</button>
+
+            <div class="output-box">
+                <h3>Professional Output:</h3>
+                <p id="outputText"></p>
+                <button id="copyBtn" onclick="copyText()">Copy</button>
+                <button id="rewriteBtn" onclick="convertText()" style="display: none;">Rewrite</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="historySection" style="display: none;">
+        <h3>Your Past Conversions</h3>
+        <div id="historyList">
+            <p>Loading history...</p>
+        </div>
+    </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
