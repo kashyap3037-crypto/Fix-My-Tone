@@ -1,96 +1,169 @@
-async function convertText() {
-    const input = document.getElementById("inputText").value;
-    const tone = document.getElementById("tone").value;
-    const outputText = document.getElementById("outputText");
-    const convertBtn = document.getElementById("convertBtn");
-    const rewriteBtn = document.getElementById("rewriteBtn");
-    
-    if (!input) return;
+// ─── Character Counter ───────────────────────────────────────────────────────
+const inputTextEl = document.getElementById("inputText");
+inputTextEl.addEventListener("input", () => {
+    document.getElementById("charCount").textContent = inputTextEl.value.length;
+});
 
-    // Set loading state
-    outputText.innerText = "Polishing your text... ⏳";
-    outputText.classList.add("loading-animation");
+// ─── Convert ─────────────────────────────────────────────────────────────────
+async function convertText() {
+    const input     = inputTextEl.value.trim();
+    const tone      = document.getElementById("tone").value;
+    const outputEl  = document.getElementById("outputText");
+    const outputBox = document.getElementById("outputBox");
+    const convertBtn = document.getElementById("convertBtn");
+    const btnText   = document.getElementById("convertBtnText");
+    const rewriteBtn = document.getElementById("rewriteBtn");
+
+    if (!input) {
+        inputTextEl.focus();
+        inputTextEl.style.borderColor = "rgba(239,68,68,0.6)";
+        setTimeout(() => { inputTextEl.style.borderColor = ""; }, 1500);
+        return;
+    }
+
+    // Loading state
     convertBtn.disabled = true;
     rewriteBtn.disabled = true;
+    convertBtn.classList.add("loading");
+    btnText.textContent  = "Polishing...";
+    outputEl.textContent = "Analysing your text... ✦";
+    outputEl.classList.remove("result-ready");
+    outputBox.classList.remove("has-result");
+    outputEl.classList.add("loading-animation");
 
     try {
-        const response = await fetch("/api/convert", {
+        const res  = await fetch("/api/convert", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ input, tone })
         });
+        const data = await res.json();
 
-        const data = await response.json();
         if (data.error) {
-            outputText.innerText = `Error: ${data.error}`;
+            outputEl.textContent = `⚠ ${data.error}`;
         } else {
-            outputText.innerText = data.result;
-            // Reveal rewrite button when successful
-            rewriteBtn.style.display = "inline-block";
+            // Typewriter reveal
+            await typeWriter(outputEl, data.result);
+            outputEl.classList.add("result-ready");
+            outputBox.classList.add("has-result");
+            rewriteBtn.style.display = "flex";
         }
     } catch (err) {
-        outputText.innerText = `Fetch Error: ${err.message}`;
+        outputEl.textContent = `⚠ Network error: ${err.message}`;
     } finally {
-        // Remove loading state
-        outputText.classList.remove("loading-animation");
-        convertBtn.disabled = false;
-        rewriteBtn.disabled = false;
+        outputEl.classList.remove("loading-animation");
+        convertBtn.disabled  = false;
+        rewriteBtn.disabled  = false;
+        convertBtn.classList.remove("loading");
+        btnText.textContent  = "Polish It";
     }
 }
 
-function copyText(text) {
-    const textToCopy = text || document.getElementById("outputText").innerText;
-    navigator.clipboard.writeText(textToCopy);
-    alert("Copied!");
+// ─── Typewriter Effect ────────────────────────────────────────────────────────
+function typeWriter(el, text, speed = 10) {
+    return new Promise(resolve => {
+        el.textContent = "";
+        let i = 0;
+        const interval = setInterval(() => {
+            el.textContent += text[i];
+            i++;
+            if (i >= text.length) {
+                clearInterval(interval);
+                resolve();
+            }
+        }, speed);
+    });
 }
 
-function switchTab(tabId) {
-    const polisherSec = document.getElementById("polisherSection");
-    const historySec = document.getElementById("historySection");
-    const tabPolisher = document.getElementById("tab-polisher");
-    const tabHistory = document.getElementById("tab-history");
+// ─── Copy ─────────────────────────────────────────────────────────────────────
+function copyText() {
+    const text = document.getElementById("outputText").textContent;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => showToast("Copied!"));
+}
 
-    if (tabId === 'history') {
-        polisherSec.style.display = 'none';
-        historySec.style.display = 'block';
-        tabPolisher.classList.remove('active');
-        tabHistory.classList.add('active');
+function showToast(msg) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2200);
+}
+
+// ─── Tab Switching ────────────────────────────────────────────────────────────
+function switchTab(tabId) {
+    const polisherSec  = document.getElementById("polisherSection");
+    const historySec   = document.getElementById("historySection");
+    const tabPolisher  = document.getElementById("tab-polisher");
+    const tabHistory   = document.getElementById("tab-history");
+
+    if (tabId === "history") {
+        polisherSec.style.display  = "none";
+        historySec.style.display   = "block";
+        tabPolisher.classList.remove("active");
+        tabPolisher.setAttribute("aria-selected", "false");
+        tabHistory.classList.add("active");
+        tabHistory.setAttribute("aria-selected", "true");
         fetchHistory();
     } else {
-        polisherSec.style.display = 'block';
-        historySec.style.display = 'none';
-        tabPolisher.classList.add('active');
-        tabHistory.classList.remove('active');
+        historySec.style.display   = "none";
+        polisherSec.style.display  = "block";
+        tabHistory.classList.remove("active");
+        tabHistory.setAttribute("aria-selected", "false");
+        tabPolisher.classList.add("active");
+        tabPolisher.setAttribute("aria-selected", "true");
     }
 }
 
+// ─── Fetch History ────────────────────────────────────────────────────────────
 async function fetchHistory() {
-    const historyList = document.getElementById("historyList");
-    historyList.innerHTML = "<p>Loading your past conversions...</p>";
-    
+    const list   = document.getElementById("historyList");
+    const badge  = document.getElementById("historyBadge");
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div>`;
+
     try {
-        const res = await fetch("/api/history");
+        const res  = await fetch("/api/history");
         const data = await res.json();
-        
+
+        badge.textContent = data.length || 0;
+
         if (!data || data.length === 0) {
-            historyList.innerHTML = "<p>No past conversions yet. Time to polish some text!</p>";
+            list.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">🕐</div>
+                    <p>No conversions yet.</p>
+                    <span>Polish some text first!</span>
+                </div>`;
             return;
         }
 
-        historyList.innerHTML = "";
-        data.forEach(item => {
+        list.innerHTML = "";
+        data.forEach((item, i) => {
             const card = document.createElement("div");
             card.className = "history-card";
+            card.style.animationDelay = `${i * 0.05}s`;
+            const date = item.created_at
+                ? new Date(item.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+                : "";
             card.innerHTML = `
-                <div class="history-tone">${item.tone}</div>
-                <div class="history-original">"${item.original_text}"</div>
-                <div class="history-result">${item.converted_text}</div>
+                <div class="history-tone">${item.tone || "Unknown"}</div>
+                <div class="history-original">"${escapeHtml(item.original_text)}"</div>
+                <div class="history-result">${escapeHtml(item.converted_text)}</div>
+                ${date ? `<div class="history-time">${date}</div>` : ""}
             `;
-            historyList.appendChild(card);
+            list.appendChild(card);
         });
     } catch (e) {
-        historyList.innerHTML = `<p>Error loading history: ${e.message}</p>`;
+        list.innerHTML = `<div class="empty-state"><p>⚠ Failed to load history</p><span>${e.message}</span></div>`;
     }
+}
+
+function escapeHtml(str = "") {
+    return str
+        .replace(/&/g,  "&amp;")
+        .replace(/</g,  "&lt;")
+        .replace(/>/g,  "&gt;")
+        .replace(/"/g,  "&quot;");
 }
