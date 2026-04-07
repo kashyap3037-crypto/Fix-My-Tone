@@ -49,6 +49,8 @@ async function convertText() {
     outputBox.classList.remove("has-result");
     outputEl.classList.add("loading-animation");
 
+    let isCooldown = false;
+
     try {
         const res  = await fetch("/api/convert", {
             method: "POST",
@@ -56,6 +58,29 @@ async function convertText() {
             body: JSON.stringify({ input, tone, outputStyle: selectedOutputStyle })
         });
         const data = await res.json();
+
+        // Check for Rate Limit (429)
+        if (res.status === 429 || (data.error && data.error.includes("limit reach"))) {
+            isCooldown = true;
+            let seconds = 60;
+            convertBtn.disabled = true;
+            convertBtn.classList.remove("loading");
+            outputEl.classList.remove("loading-animation");
+
+            const timer = setInterval(() => {
+                seconds--;
+                btnText.textContent = `Wait ${seconds}s...`;
+                outputEl.innerHTML = `<span style="color: #ef4444;">⚠ AI limit reached.</span> Please wait <strong>${seconds}s</strong> before trying again. ✦`;
+                
+                if (seconds <= 0) {
+                    clearInterval(timer);
+                    convertBtn.disabled = false;
+                    btnText.textContent = "Polish It";
+                    outputEl.textContent = "You're good to go! Ready for more polishing. ✦";
+                }
+            }, 1000);
+            return;
+        }
 
         if (data.error) {
             outputEl.textContent = `⚠ ${data.error}`;
@@ -72,11 +97,13 @@ async function convertText() {
     } catch (err) {
         outputEl.textContent = `⚠ Network error: ${err.message}`;
     } finally {
-        outputEl.classList.remove("loading-animation");
-        convertBtn.disabled  = false;
-        rewriteBtn.disabled  = false;
-        convertBtn.classList.remove("loading");
-        btnText.textContent  = "Polish It";
+        if (!isCooldown) {
+            outputEl.classList.remove("loading-animation");
+            convertBtn.disabled  = false;
+            rewriteBtn.disabled  = false;
+            convertBtn.classList.remove("loading");
+            btnText.textContent  = "Polish It";
+        }
     }
 }
 
