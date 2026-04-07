@@ -11,8 +11,10 @@ const port = process.env.PORT || 3000;
 // Initialize Gemini AI
 let ai = null;
 if (process.env.GEMINI_API_KEY) {
-    // 1000+ users/day fits well within Gemini 1.5 Flash Free Tier (15 RPM / 1500 RPD)
+    console.log('Gemini API Key detected. Initializing v2026 SDK...');
     ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+} else {
+    console.error('CRITICAL: GEMINI_API_KEY is NOT set in environment!');
 }
 
 // Middleware
@@ -68,8 +70,8 @@ Text to transform:
 "${input}"`;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: systemPrompt,
+            model: 'gemini-2.0-flash',
+            contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
             safetySettings: [
                 { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
                 { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -78,32 +80,34 @@ Text to transform:
             ]
         });
 
-        // Robust extraction for @google/genai SDK
+        // Robust extraction for @google/genai SDK (v1.48.0 - 2026)
         let resultText = "";
         
-        if (typeof response.text === 'string') {
-            resultText = response.text;
-        } else if (typeof response.text === 'function') {
-            resultText = response.text();
-        } else if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
+        // In @google/genai, response.text is a getter or property
+        if (response && response.text) {
+             resultText = response.text;
+        } else if (response && response.candidates?.[0]?.content?.parts?.[0]?.text) {
             resultText = response.candidates[0].content.parts[0].text;
-        } else if (response.response?.text) {
-            resultText = typeof response.response.text === 'function' ? response.response.text() : response.response.text;
         }
 
         if (!resultText) {
-            console.error('Incomplete AI Response:', JSON.stringify(response, null, 2));
-            throw new Error('AI returned an empty response. This usually happens due to safety filters.');
+            console.error('Empty AI Response:', JSON.stringify(response, null, 2));
+            throw new Error('AI returned an empty response. This might be a safety block or service issue.');
         }
 
         res.json({ result: resultText.trim() });
 
     } catch (error) {
-        console.error('AI Error Detail:', error);
+        console.error('CRITICAL AI ERROR:', error);
         
-        if (error.message?.includes('429')) {
-            return res.status(429).json({ error: 'Daily/Minute limit reached. Please try again later.' });
+        if (error.status === 429 || (error.message && error.message.includes('429'))) {
+            return res.status(429).json({ error: 'AI limit reach. try after 60s' });
         }
+        
+        if (error.status === 503 || (error.message && error.message.includes('503'))) {
+            return res.status(503).json({ error: 'AI busy. try in 10s' });
+        }
+
         res.status(500).json({ error: 'Failed to polish text. AI might have blocked the input for safety.' });
     }
 });
