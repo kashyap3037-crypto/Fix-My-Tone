@@ -314,43 +314,7 @@ optgroup {
     background: var(--dark-card);
 }
 
-/* ==============================
-   OUTPUT STYLE PILLS
-   ============================== */
-.style-pills {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
 
-.style-pill {
-    flex: 1;
-    min-width: 100px;
-    padding: 9px 12px;
-    background: var(--dark-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    font-family: inherit;
-    font-size: 0.82rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition);
-    text-align: center;
-}
-
-.style-pill:hover:not(.active) {
-    border-color: rgba(99,102,241,0.4);
-    color: var(--text);
-    background: var(--accent-dim);
-}
-
-.style-pill.active {
-    background: var(--accent-dim);
-    border-color: var(--border-accent);
-    color: var(--accent-light);
-    box-shadow: 0 0 12px rgba(99,102,241,0.12);
-}
 
 /* ==============================
    BUTTONS

@@ -4,18 +4,7 @@ inputTextEl.addEventListener("input", () => {
     document.getElementById("charCount").textContent = inputTextEl.value.length;
 });
 
-// ─── Output Style Pills ───────────────────────────────────────────────────────
-let selectedOutputStyle = "Highly Formal (Corporate)";
-
 document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll(".style-pill").forEach(pill => {
-        pill.addEventListener("click", () => {
-            document.querySelectorAll(".style-pill").forEach(p => p.classList.remove("active"));
-            pill.classList.add("active");
-            selectedOutputStyle = pill.dataset.value;
-        });
-    });
-    
     // Initialize history badge
     const rawData = localStorage.getItem("wordmasala_history");
     const count = rawData ? JSON.parse(rawData).length : 0;
@@ -55,7 +44,7 @@ async function convertText() {
         const res  = await fetch("/api/convert", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ input, tone, outputStyle: selectedOutputStyle })
+            body: JSON.stringify({ input, tone, outputStyle: "Balanced" })
         });
         const data = await res.json();
 
