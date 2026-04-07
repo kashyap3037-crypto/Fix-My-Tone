@@ -72,17 +72,33 @@ Text to transform:
             contents: systemPrompt,
         });
 
-        const resultText = response.text.trim();
+        // Robust extraction for @google/genai SDK
+        let resultText = "";
+        
+        if (typeof response.text === 'string') {
+            resultText = response.text;
+        } else if (typeof response.text === 'function') {
+            resultText = response.text();
+        } else if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
+            resultText = response.candidates[0].content.parts[0].text;
+        } else if (response.response?.text) {
+            resultText = typeof response.response.text === 'function' ? response.response.text() : response.response.text;
+        }
 
-        res.json({ result: resultText });
+        if (!resultText) {
+            console.error('Incomplete AI Response:', JSON.stringify(response, null, 2));
+            throw new Error('AI returned an empty response. This usually happens due to safety filters.');
+        }
+
+        res.json({ result: resultText.trim() });
 
     } catch (error) {
-        console.error('AI Error:', error);
-        // Handle Gemini quota limits or errors
+        console.error('AI Error Detail:', error);
+        
         if (error.message?.includes('429')) {
-            return res.status(429).json({ error: 'Server busy. Please try again in a few seconds.' });
+            return res.status(429).json({ error: 'Daily/Minute limit reached. Please try again later.' });
         }
-        res.status(500).json({ error: 'Failed to polish text. Please try again.' });
+        res.status(500).json({ error: 'Failed to polish text. AI might have blocked the input for safety.' });
     }
 });
 
