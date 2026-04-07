@@ -15,6 +15,11 @@ document.addEventListener("DOMContentLoaded", () => {
             selectedOutputStyle = pill.dataset.value;
         });
     });
+    
+    // Initialize history badge
+    const rawData = localStorage.getItem("wordmasala_history");
+    const count = rawData ? JSON.parse(rawData).length : 0;
+    document.getElementById("historyBadge").textContent = count;
 });
 
 // ─── Convert ─────────────────────────────────────────────────────────────────
@@ -60,6 +65,9 @@ async function convertText() {
             outputEl.classList.add("result-ready");
             outputBox.classList.add("has-result");
             rewriteBtn.style.display = "flex";
+
+            // Save to local history for zero-cost persistence
+            saveToHistory(input, data.result, tone);
         }
     } catch (err) {
         outputEl.textContent = `⚠ Network error: ${err.message}`;
@@ -156,46 +164,64 @@ function switchTab(tabId) {
 }
 
 // ─── Fetch History ────────────────────────────────────────────────────────────
-async function fetchHistory() {
+function fetchHistory() {
     const list   = document.getElementById("historyList");
     const badge  = document.getElementById("historyBadge");
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div>`;
+    
+    // Read from localStorage for zero-cost backend
+    const rawData = localStorage.getItem("wordmasala_history");
+    const data = rawData ? JSON.parse(rawData) : [];
 
-    try {
-        const res  = await fetch("/api/history");
-        const data = await res.json();
+    badge.textContent = data.length || 0;
 
-        badge.textContent = data.length || 0;
-
-        if (!data || data.length === 0) {
-            list.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">🕐</div>
-                    <p>No conversions yet.</p>
-                    <span>Polish some text first!</span>
-                </div>`;
-            return;
-        }
-
-        list.innerHTML = "";
-        data.forEach((item, i) => {
-            const card = document.createElement("div");
-            card.className = "history-card";
-            card.style.animationDelay = `${i * 0.05}s`;
-            const date = item.created_at
-                ? new Date(item.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
-                : "";
-            card.innerHTML = `
-                <div class="history-tone">${item.tone || "Unknown"}</div>
-                <div class="history-original">"${escapeHtml(item.original_text)}"</div>
-                <div class="history-result">${escapeHtml(item.converted_text)}</div>
-                ${date ? `<div class="history-time">${date}</div>` : ""}
-            `;
-            list.appendChild(card);
-        });
-    } catch (e) {
-        list.innerHTML = `<div class="empty-state"><p>⚠ Failed to load history</p><span>${e.message}</span></div>`;
+    if (!data || data.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🕐</div>
+                <p>No conversions yet.</p>
+                <span>Polish some text first!</span>
+            </div>`;
+        return;
     }
+
+    list.innerHTML = "";
+    // Show latest first
+    [...data].reverse().forEach((item, i) => {
+        const card = document.createElement("div");
+        card.className = "history-card";
+        card.style.animationDelay = `${i * 0.05}s`;
+        const date = item.created_at
+            ? new Date(item.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+            : "";
+        card.innerHTML = `
+            <div class="history-tone">${item.tone || "Unknown"}</div>
+            <div class="history-original">"${escapeHtml(item.original_text)}"</div>
+            <div class="history-result">${escapeHtml(item.converted_text)}</div>
+            ${date ? `<div class="history-time">${date}</div>` : ""}
+        `;
+        list.appendChild(card);
+    });
+}
+
+function saveToHistory(original_text, converted_text, tone) {
+    const rawData = localStorage.getItem("wordmasala_history");
+    const history = rawData ? JSON.parse(rawData) : [];
+    
+    const newItem = {
+        original_text,
+        converted_text,
+        tone,
+        created_at: new Date().toISOString()
+    };
+    
+    // Keep only last 50 items to keep it lightweight
+    history.push(newItem);
+    if (history.length > 50) history.shift();
+    
+    localStorage.setItem("wordmasala_history", JSON.stringify(history));
+    
+    // Update badge in real-time
+    document.getElementById("historyBadge").textContent = history.length;
 }
 
 function escapeHtml(str = "") {
