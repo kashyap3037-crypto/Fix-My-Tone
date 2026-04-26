@@ -48,15 +48,8 @@ app.post('/api/convert', apiLimiter, async (req, res) => {
             return res.json({ result: `[MOCK POLISH]: ${input} (Tone: ${tone})` });
         }
 
-        const model = genAI.getGenerativeModel({ 
-            model: 'gemini-2.0-flash',
-            generationConfig: {
-                temperature: 0.7,
-                topP: 0.8,
-                topK: 40,
-                maxOutputTokens: 2048,
-            }
-        });
+        const apiKey = process.env.GEMINI_API_KEY.trim();
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
         const systemPrompt = `You are WordMasala AI Polisher. 
 Tone: ${tone}. 
@@ -66,9 +59,30 @@ Output ONLY the rewritten text without any quotes or additional comments.
 
 Text to rewrite: "${input}"`;
 
-        const result = await model.generateContent(systemPrompt);
-        const response = await result.response;
-        const resultText = response.text();
+        const apiResponse = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: systemPrompt }] }],
+                generationConfig: {
+                    temperature: 0.7,
+                    topP: 0.8,
+                    topK: 40,
+                    maxOutputTokens: 2048,
+                }
+            })
+        });
+
+        if (!apiResponse.ok) {
+            const errorData = await apiResponse.json();
+            const error = new Error(errorData.error?.message || 'AI Request Failed');
+            error.status = apiResponse.status;
+            error.details = errorData;
+            throw error;
+        }
+
+        const data = await apiResponse.json();
+        const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!resultText) {
             throw new Error('AI empty response');
