@@ -49,7 +49,7 @@ app.post('/api/convert', apiLimiter, async (req, res) => {
         }
 
         const model = genAI.getGenerativeModel({ 
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.0-flash',
             generationConfig: {
                 temperature: 0.7,
                 topP: 0.8,
@@ -88,14 +88,15 @@ Text to rewrite: "${input}"`;
         }
         
         if (error.status === 400 || (error.message && error.message.includes('400'))) {
-             return res.status(400).json({ error: 'Invalid request. Please check your input.' });
+             console.error('DETAILED 400 ERROR:', JSON.stringify(error, null, 2));
+             return res.status(400).json({ error: `Invalid request: ${error.message || 'Check your input.'}` });
         }
 
         if (error.status === 503 || (error.message && error.message.includes('503'))) {
             return res.status(503).json({ error: 'AI Busy. try in 10s' });
         }
 
-        res.status(500).json({ error: 'AI processing error. Please try again later.' });
+        res.status(500).json({ error: `AI error: ${error.message || 'Please try again later.'}` });
     }
 });
 
