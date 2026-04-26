@@ -64,15 +64,14 @@ Output ONLY the rewritten text without any quotes or additional comments.
 
 Text to rewrite: "${input}"`;
 
-    let lastError = null;
-
-    for (let i = 0; i < keys.length; i++) {
-        const apiKey = keys[i].trim();
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
+    // 1. Try GEMINI
+    if (process.env.GEMINI_API_KEY) {
         try {
-            console.log(`Attempting with API Key ${i + 1}...`);
-            const apiResponse = await fetch(url, {
+            console.log('Attempting with GEMINI...');
+            const apiKey = process.env.GEMINI_API_KEY.trim();
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            const geminiRes = await fetch(url, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -80,57 +79,59 @@ Text to rewrite: "${input}"`;
                 },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: systemPrompt }] }],
-                    generationConfig: {
-                        temperature: 0.7,
-                        topP: 0.8,
-                        topK: 40,
-                        maxOutputTokens: 2048,
-                    }
+                    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
                 })
             });
 
-            if (!apiResponse.ok) {
-                const errorData = await apiResponse.json();
-                const error = new Error(errorData.error?.message || 'AI Request Failed');
-                error.status = apiResponse.status;
-                error.details = errorData;
-                
-                // If it's a quota error and we have more keys, continue to next key
-                if (error.status === 429 && i < keys.length - 1) {
-                    console.warn(`Key ${i + 1} quota exceeded, falling back to next key...`);
-                    lastError = error;
-                    continue;
-                }
-                throw error;
+            if (geminiRes.ok) {
+                const data = await geminiRes.json();
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (resultText) return res.json({ result: resultText.trim() });
+            } else {
+                const err = await geminiRes.json();
+                console.warn('GEMINI Failed:', err.error?.message || 'Unknown error');
             }
-
-            const data = await apiResponse.json();
-            const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (!resultText) {
-                throw new Error('AI empty response');
-            }
-
-            return res.json({ result: resultText.trim() });
-
-        } catch (error) {
-            lastError = error;
-            console.error(`Error with Key ${i + 1}:`, error.message);
-            // If it's not a quota error, don't necessarily wait for next key if it's a 400 etc. 
-            // but for now let's try all keys regardless of error type if it fails
-            if (i < keys.length - 1) continue;
+        } catch (err) {
+            console.error('GEMINI Error:', err.message);
         }
     }
 
-    // If we reach here, all keys failed
-    const error = lastError || new Error('All API keys failed');
-    console.error('FINAL ERROR:', error);
-    
-    if (error.status === 429) {
-        return res.status(429).json({ error: 'All API daily limits reached. try in 24h.' });
+    // 2. Fallback to GROQ
+    if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'gsk_your_key_here') {
+        try {
+            console.log('Falling back to GROQ...');
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.GROQ_API_KEY.trim()}`
+                },
+                body: JSON.stringify({
+                    model: "llama-3.3-70b-versatile",
+                    messages: [
+                        { role: "system", content: "You are WordMasala AI Polisher. Output ONLY the rewritten text." },
+                        { role: "user", content: systemPrompt }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 2048
+                })
+            });
+
+            if (groqRes.ok) {
+                const data = await groqRes.json();
+                const resultText = data.choices?.[0]?.message?.content;
+                if (resultText) return res.json({ result: resultText.trim() });
+            } else {
+                const err = await groqRes.json();
+                console.warn('GROQ Failed:', err.error?.message || 'Unknown error');
+            }
+        } catch (err) {
+            console.error('GROQ Error:', err.message);
+        }
     }
-    
-    res.status(error.status || 500).json({ error: `AI error: ${error.message || 'Please try again later.'}` });
+
+    // ALL FAILED
+    res.status(500).json({ error: 'All AI providers reached their limit. Try again later.' });
 });
 
 // Start server
