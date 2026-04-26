@@ -2,7 +2,6 @@
 
 **WordMasala** is a premium, AI-powered text polishing application designed to transform your rough drafts into professional, tone-perfect content instantly. Whether you're writing a corporate email, a casual text, or a funny post, WordMasala ensures your message lands exactly how you intended.
 
-![WordMasala Preview](https://via.placeholder.com/800x400/0f172a/ffffff?text=WordMasala+AI+Polisher)
 
 ## ✨ Key Features
 
