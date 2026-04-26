@@ -38,20 +38,25 @@ const apiLimiter = rateLimit({
 app.post('/api/convert', apiLimiter, async (req, res) => {
     const { input, tone, outputStyle } = req.body;
 
-    if (!input || input.trim().length === 0) {
-        return res.status(400).json({ error: 'Text required' });
+    if (!input) {
+        return res.status(400).json({ error: 'Input text is required' });
     }
 
-    try {
-        if (MOCK_MODE || !genAI) {
-            console.log('Using MOCK response...');
-            return res.json({ result: `[MOCK POLISH]: ${input} (Tone: ${tone})` });
-        }
+    if (MOCK_MODE) {
+        console.log('Using MOCK response...');
+        return res.json({ result: `[MOCK POLISH]: ${input} (Tone: ${tone})` });
+    }
 
-        const apiKey = process.env.GEMINI_API_KEY.trim();
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const keys = [
+        process.env.GEMINI_API_KEY,
+        process.env.GEMINI_API_KEY_2
+    ].filter(k => k && k.trim());
 
-        const systemPrompt = `You are WordMasala AI Polisher. 
+    if (keys.length === 0) {
+        return res.status(500).json({ error: 'No API keys configured' });
+    }
+
+    const systemPrompt = `You are WordMasala AI Polisher. 
 Tone: ${tone}. 
 Output Style: ${outputStyle || 'Balanced'}. 
 Task: Rewrite the following text to match the specified tone and style while keeping the original intent. 
@@ -59,62 +64,73 @@ Output ONLY the rewritten text without any quotes or additional comments.
 
 Text to rewrite: "${input}"`;
 
-        const apiResponse = await fetch(url, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'x-goog-api-key': apiKey
-            },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: systemPrompt }] }],
-                generationConfig: {
-                    temperature: 0.7,
-                    topP: 0.8,
-                    topK: 40,
-                    maxOutputTokens: 2048,
+    let lastError = null;
+
+    for (let i = 0; i < keys.length; i++) {
+        const apiKey = keys[i].trim();
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+        try {
+            console.log(`Attempting with API Key ${i + 1}...`);
+            const apiResponse = await fetch(url, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: systemPrompt }] }],
+                    generationConfig: {
+                        temperature: 0.7,
+                        topP: 0.8,
+                        topK: 40,
+                        maxOutputTokens: 2048,
+                    }
+                })
+            });
+
+            if (!apiResponse.ok) {
+                const errorData = await apiResponse.json();
+                const error = new Error(errorData.error?.message || 'AI Request Failed');
+                error.status = apiResponse.status;
+                error.details = errorData;
+                
+                // If it's a quota error and we have more keys, continue to next key
+                if (error.status === 429 && i < keys.length - 1) {
+                    console.warn(`Key ${i + 1} quota exceeded, falling back to next key...`);
+                    lastError = error;
+                    continue;
                 }
-            })
-        });
-
-        if (!apiResponse.ok) {
-            const errorData = await apiResponse.json();
-            const error = new Error(errorData.error?.message || 'AI Request Failed');
-            error.status = apiResponse.status;
-            error.details = errorData;
-            throw error;
-        }
-
-        const data = await apiResponse.json();
-        const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (!resultText) {
-            throw new Error('AI empty response');
-        }
-
-        res.json({ result: resultText.trim() });
-
-    } catch (error) {
-        console.error('SERVER LOG - AI ERROR:', error);
-        
-        // Handle Gemini Quota Errors
-        if (error.status === 429 || (error.message && error.message.includes('429'))) {
-            if (error.message && (error.message.includes('quota') || error.message.includes('Quota'))) {
-                return res.status(429).json({ error: 'Daily free quota used up. Reset soon.' });
+                throw error;
             }
-            return res.status(429).json({ error: 'AI limit reach. try after 60s' });
-        }
-        
-        if (error.status === 400 || (error.message && error.message.includes('400'))) {
-             console.error('DETAILED 400 ERROR:', JSON.stringify(error, null, 2));
-             return res.status(400).json({ error: `Invalid request: ${error.message || 'Check your input.'}` });
-        }
 
-        if (error.status === 503 || (error.message && error.message.includes('503'))) {
-            return res.status(503).json({ error: 'AI Busy. try in 10s' });
-        }
+            const data = await apiResponse.json();
+            const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        res.status(500).json({ error: `AI error: ${error.message || 'Please try again later.'}` });
+            if (!resultText) {
+                throw new Error('AI empty response');
+            }
+
+            return res.json({ result: resultText.trim() });
+
+        } catch (error) {
+            lastError = error;
+            console.error(`Error with Key ${i + 1}:`, error.message);
+            // If it's not a quota error, don't necessarily wait for next key if it's a 400 etc. 
+            // but for now let's try all keys regardless of error type if it fails
+            if (i < keys.length - 1) continue;
+        }
     }
+
+    // If we reach here, all keys failed
+    const error = lastError || new Error('All API keys failed');
+    console.error('FINAL ERROR:', error);
+    
+    if (error.status === 429) {
+        return res.status(429).json({ error: 'All API daily limits reached. try in 24h.' });
+    }
+    
+    res.status(error.status || 500).json({ error: `AI error: ${error.message || 'Please try again later.'}` });
 });
 
 // Start server
